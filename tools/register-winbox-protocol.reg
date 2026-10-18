@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Classes\winbox]
+@="URL:Winbox Protocol"
+"URL Protocol"=""
+
+[HKEY_CURRENT_USER\Software\Classes\winbox\shell]
+
+[HKEY_CURRENT_USER\Software\Classes\winbox\shell\open]
+
+[HKEY_CURRENT_USER\Software\Classes\winbox\shell\open\command]
+@="wscript.exe \"D:\\teamuser portal\\free-react-tailwind-admin-dashboard-main\\tools\\launch-winbox.vbs\" \"%1\""

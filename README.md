@@ -1,226 +1,340 @@
-# TailAdmin React - Free React Tailwind Admin Dashboard Template
+# TeamZero Solutions Portal — Ubuntu Deployment & Installation Guide
 
-TailAdmin is a free and open-source admin dashboard template built on **React and Tailwind CSS**, providing developers
-with everything they need to create a comprehensive, data-driven back-end,
-dashboard, or admin panel solution for upcoming web projects.
+Complete, step-by-step production deployment guide for the **TeamZero Solutions NOC & Customer Management Portal** on **Ubuntu 20.04, 22.04, and 24.04 LTS**.
 
-With TailAdmin, you get access to all the necessary dashboard UI components, elements, and pages required to build a
-feature-rich and complete dashboard or admin panel. Whether you're building dashboard or admin panel for a complex web
-application or a simple website, TailAdmin is the perfect solution to help you get up and running quickly.
+---
 
-![TailAdmin React.js Dashboard Preview](./banner.png)
+## 📋 Architecture Overview
 
-## Overview
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4 (compiled to static production bundle in `dist/`, served by Nginx).
+- **Backend API**: Node.js Express daemon running on port `5001`, managed by **PM2**.
+- **Database**: MySQL 8.0+ storing customers, devices, NMS portals, roles, and RBAC permissions.
+- **Web Server & Reverse Proxy**: **Nginx** handles incoming HTTP/HTTPS traffic on ports 80/443, serves the Vite SPA frontend, and proxies `/api/*` requests to Express on `127.0.0.1:5001`.
 
-TailAdmin provides essential UI components and layouts for building feature-rich, data-driven admin dashboards and
-control panels. It's built on:
+---
 
-- React 19
-- TypeScript
-- Tailwind CSS v4
+## ⚡ Option 1: Quick 1-Command Automated Deployment
 
-### Quick Links
-
-- [✨ Visit Website](https://tailadmin.com)
-- [📄 Documentation](https://tailadmin.com/docs)
-- [⬇️ Download](https://tailadmin.com/download)
-- [🖌️ Figma Design File (Community Edition)](https://www.figma.com/community/file/1214477970819985778)
-- [⚡ Get PRO Version](https://tailadmin.com/pricing)
-
-### Demos
-
-- [Free Version](https://free-react-demo.tailadmin.com/)
-- [Pro Version](https://react-demo.tailadmin.com)
-
-### Other Versions
-
-- [HTML Version](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template)
-- [Next.js Version](https://github.com/TailAdmin/free-nextjs-admin-dashboard)
-- [Vue.js Version](https://github.com/TailAdmin/vue-tailwind-admin-dashboard)
-- [Angular Version](https://github.com/TailAdmin/free-angular-tailwind-dashboard)
-- [Laravel Version](https://github.com/TailAdmin/tailadmin-laravel)
-
-## Installation
-
-### Prerequisites
-
-To get started with TailAdmin, ensure you have the following prerequisites installed and set up:
-
-- Node.js 20.x or later
-
-### Cloning the Repository
-
-Clone the repository using the following command:
+If you are deploying on a fresh Ubuntu server, run the automated installation script included in the repository:
 
 ```bash
-git clone https://github.com/TailAdmin/free-react-tailwind-admin-dashboard.git
+# 1. Clone your repository (or upload project files to /var/www/teamzero)
+sudo mkdir -p /var/www/teamzero
+cd /var/www/teamzero
+# (Clone or copy project files here)
+
+# 2. Make the deployment script executable and run it
+chmod +x deploy_ubuntu.sh
+./deploy_ubuntu.sh
 ```
 
-> Windows Users: place the repository near the root of your drive if you face issues while cloning.
+The script will automatically:
+1. Update apt repositories and install Node.js 22 LTS, Nginx, MySQL Server, and PM2.
+2. Install npm dependencies and build the Vite frontend (`dist/`).
+3. Start the Express API with PM2 and configure auto-restart on boot.
+4. Configure and activate the Nginx reverse proxy.
+5. Perform an API health check.
 
-1. Install dependencies:
+---
 
-    ```bash
-    npm install
-    # or
-    yarn install
-    ```
+## 🛠️ Option 2: Step-by-Step Manual Installation
 
-2. Start the development server:
-    ```bash
-    npm run dev
-    # or
-    yarn dev
-    ```
+Follow these steps for full control over your server configuration.
 
-## Components
+### Step 1: Update System Packages & Install Base Tools
 
-TailAdmin is a pre-designed starting point for building a web-based dashboard using React.js and Tailwind CSS. The
-template includes:
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y curl git unzip ufw nginx mysql-server build-essential
+```
 
-- Sophisticated and accessible sidebar
-- Data visualization components
-- Prebuilt profile management and 404 page
-- Tables and Charts(Line and Bar)
-- Authentication forms and input elements
-- Alerts, Dropdowns, Modals, Buttons and more
-- FAQ & Accordion, Testimonials, and Carousels
-- Can't forget Dark Mode 🕶️
+---
 
-All components are built with React and styled using Tailwind CSS for easy customization.
+### Step 2: Install Node.js 22 LTS & PM2
 
-## Feature Comparison
+The application requires Node.js >= 20.19.0 or Node.js >= 22.x:
 
-### Free Version
+```bash
+# Add NodeSource official Node.js 22 LTS repository
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
 
-- 1 Unique Dashboard
-- 35+ dashboard components
-- 50+ UI elements
-- Basic Figma design files
-- Community support
+# Verify versions
+node -v   # Should show v22.x.x
+npm -v
 
-### Pro Version
+# Install PM2 process manager globally
+sudo npm install -g pm2
+```
 
-- 7 Unique Dashboards: Analytics, Ecommerce, Marketing, CRM, SaaS, Stocks, Logistics (more coming soon)
-- 500+ dashboard components and UI elements
-- Complete Figma design file
-- Email support
+---
 
-To learn more about pro version features and pricing, visit our [pricing page](https://tailadmin.com/pricing).
+### Step 3: Configure MySQL Database
 
-## Changelog
+1. Ensure MySQL is running and enabled on boot:
+```bash
+sudo systemctl start mysql
+sudo systemctl enable mysql
+```
 
-### Version 2.4.0 - [September 13, 2026]
+2. Open the MySQL interactive shell:
+```bash
+sudo mysql
+```
 
-- Added Internationalization (Multi Language) support.
-- Updated complete template styles to support RTL.
-- Added Yearly View into calendar page.
-- Updated `maplibre-gl` implementation with `react-map-gl`.
-- Replaced `@react-jvectormap` with `jsvectormap`.
-- Added new requested components and fixed noted accessibility issues.
-- Updated project structure and component compositions for easy adaption.
-- Added AGENTS.md to easily work with AI Agents.
-- Updated all the packages and libraries to the latest versions. Also removed unused packages.
+3. Create the database and dedicated database user (replace `'YourStrongPassword123!'` with your secure password):
+```sql
+CREATE DATABASE IF NOT EXISTS teamzero_portal CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-### Version 2.3.1 - [May 23, 2026]
+CREATE USER IF NOT EXISTS 'teamzero_user'@'localhost' IDENTIFIED WITH mysql_native_password BY 'YourStrongPassword123!';
+-- If using MySQL 8.4+: IDENTIFIED BY 'YourStrongPassword123!';
 
-- Added AI Settings page to configure models, keys, and token limits.
-- Added Maps page with MapLibre GL, Leaflet, and iframe styles.
-- Added Vector Maps page powered by AmCharts 5 geodata (World & USA).
-- Added Radar Charts page with 3 unique formats.
-- Added Radial Progress Charts page featuring 4 custom layout templates.
-- Introduced new Bar Charts Five & Six and Pie Charts Four & Five.
+GRANT ALL PRIVILEGES ON teamzero_portal.* TO 'teamzero_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
 
-### Version 2.3.0 - [April 28, 2026]
+4. Import the initial database schema and seed data:
+```bash
+cd /var/www/teamzero
+mysql -u teamzero_user -p'YourStrongPassword123!' teamzero_portal < database/schema.sql
+```
 
-- Added **AI Dashboard** with token usage and revenue tracking.
-- Added **Sales Dashboard** with retention and multi-channel analytics.
-- Added **Finance Dashboard** with cashflow and balance management.
-- Introduced **6 New Layout variations** for improved UI flexibility.
-- Integrated **Advanced Data Visualization** with 7+ new chart types.
+> **Default Seed Data Created**:
+> - Roles: `Super Admin` (all permissions, system role), `Network Admin`, `NOC Operator`, `Read-Only`.
+> - Super Admin account: Username: **`admin`** | Password: **`admin`** (first login prompts for password change).
 
-### Version 2.1.0 - [Dec 30, 2025]
+---
 
-- Resolved Date Picker positioning and input issues in Charts.
+### Step 4: Clone Code & Configure Environment Variables
 
-### Version 2.0.2 - [March 25, 2025]
+1. Set appropriate directory permissions:
+```bash
+sudo chown -R $USER:$USER /var/www/teamzero
+cd /var/www/teamzero
+```
 
-- Upgraded to React 19
-- Included overrides for packages to prevent peer dependency errors.
-- Migrated from react-flatpickr to flatpickr package for React 19 support
+2. Create/edit the production `.env` file:
+```bash
+nano .env
+```
 
-### Version 2.0.1 - [February 27, 2025]
+3. Paste your production database credentials:
+```env
+PORT=5001
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=teamzero_user
+DB_PASSWORD=YourStrongPassword123!
+DB_NAME=teamzero_portal
+```
+Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
 
-#### Update Overview
+---
 
-- Upgraded to Tailwind CSS v4 for better performance and efficiency.
-- Updated class usage to match the latest syntax and features.
-- Replaced deprecated class and optimized styles.
+### Step 5: Install Dependencies & Build Frontend
 
-#### Next Steps
+```bash
+# Install NPM dependencies
+npm install
 
-- Run npm install or yarn install to update dependencies.
-- Check for any style changes or compatibility issues.
-- Refer to the Tailwind CSS v4 [Migration Guide](https://tailwindcss.com/docs/upgrade-guide) on this release. if needed.
-- This update keeps the project up to date with the latest Tailwind improvements. 🚀
+# Compile TypeScript and build production assets into /dist
+npm run build
+```
 
-### Version 2.0.0 - [February 2025]
+Verify that the `dist/` directory was generated and contains `index.html` and the `assets/` folder.
 
-A major update with comprehensive redesign and modern React patterns implementation.
+---
 
-#### Major Improvements
+### Step 6: Start Backend API with PM2
 
-- Complete UI redesign with modern React patterns
-- New features: collapsible sidebar, chat, and calendar
-- Improved performance and accessibility
-- Updated data visualization using ApexCharts
+Start the Express API server under PM2 process management to ensure it stays online and automatically recovers from crashes or reboots:
 
-#### Key Features
+```bash
+# Start backend API process
+pm2 start server/index.js --name "teamzero-api"
 
-- Redesigned dashboards (Ecommerce, Analytics, Marketing, CRM)
-- Enhanced navigation with React Router integration
-- Advanced tables with sorting and filtering
-- Calendar with drag-and-drop support
-- New UI components and improved existing ones
+# Configure PM2 to restart automatically on system boot
+pm2 startup systemd
+# (Run the sudo env PATH=... command printed on screen by the command above if prompted)
 
-#### Breaking Changes
+# Save the current PM2 process list
+pm2 save
+```
 
-- Updated sidebar component API
-- Migrated charts to ApexCharts
-- Revised authentication system
+Verify the API is running locally:
+```bash
+curl http://127.0.0.1:5001/api/health
+# Response: {"status":"healthy","database":"connected","timestamp":...}
+```
 
-[Read more](https://tailadmin.com/docs/update-logs/react) on this release.
+---
 
-### Version 1.3.7 - [June 20, 2024]
+### Step 7: Configure Nginx as Reverse Proxy
 
-#### Enhancements
+1. Create a new Nginx virtual host configuration:
+```bash
+sudo nano /etc/nginx/sites-available/teamzero
+```
 
-1. Remove Repetition of DefaultLayout in every Pages
-2. Add ClickOutside Component for reduce repeated functionality in Header Message, Notification and User Dropdowns.
+2. Paste the following configuration (replace `/var/www/teamzero` with your actual project directory if different, and `your_domain_or_ip` with your domain or server IP):
 
-### Version 1.3.6 - [Jan 31, 2024]
+```nginx
+server {
+    listen 80;
+    server_name your_domain_or_ip;
 
-#### Enhancements
+    # Static Frontend SPA
+    root /var/www/teamzero/dist;
+    index index.html;
 
-1. Integrate flatpickr in [Date Picker/Form Elements]
-2. Change color after select an option [Select Element/Form Elements].
-3. Make it functional [Multiselect Dropdown/Form Elements].
-4. Make best value editable [Pricing Table One/Pricing Table].
-5. Rearrange Folder structure.
+    # Gzip compression for high performance
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 
-### Version 1.2.0 - [Apr 28, 2023]
+    # Route all frontend client-side routes to index.html (React Router support)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
 
-- Add Typescript in TailAdmin React.
+    # Proxy API requests to Node.js backend
+    location /api/ {
+        proxy_pass http://127.0.0.1:5001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 60s;
+    }
 
-### Version 1.0.0 - Initial Release - [Mar 13, 2023]
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 30d;
+        add_header Cache-Control "public, no-transform";
+    }
 
-- Initial release of TailAdmin React.
+    # Security Headers
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header X-Content-Type-Options "nosniff";
+}
+```
 
-## License
+3. Enable the site and test the Nginx configuration:
+```bash
+# Enable the configuration
+sudo ln -sf /etc/nginx/sites-available/teamzero /etc/nginx/sites-enabled/
 
-TailAdmin React.js Free Version is released under the MIT License.
+# Remove default site if present
+sudo rm -f /etc/nginx/sites-enabled/default
 
-## Support
+# Test Nginx syntax
+sudo nginx -t
 
-If you find this project helpful, please consider giving it a star on GitHub. Your support helps us continue developing
-and maintaining this template.
+# Reload Nginx
+sudo systemctl restart nginx
+```
+
+---
+
+### Step 8: Configure Firewall (UFW)
+
+Allow SSH, HTTP, and HTTPS traffic:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw --force enable
+sudo ufw status
+```
+
+---
+
+### Step 9: (Recommended) Secure with SSL / HTTPS (Let's Encrypt)
+
+If you have a domain pointed to your Ubuntu server IP:
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d yourdomain.com
+```
+
+Certbot will automatically obtain an SSL certificate, configure Nginx for HTTPS, and schedule automatic certificate renewal.
+
+---
+
+## 🔑 Default Administrator Credentials
+
+| Parameter | Value |
+| :--- | :--- |
+| **Portal URL** | `http://<YOUR_SERVER_IP>` or `https://<YOUR_DOMAIN>` |
+| **Username** | `admin` |
+| **Password** | `admin` |
+| **Role** | Super Admin (Full Access) |
+
+> ⚠️ **First Login**: You will be immediately prompted to set a new password on your first login.
+
+---
+
+## 🖥️ Client Workstation Setup (1-Click WinBox Launch)
+
+When your NOC engineers or operators use the web portal to connect to MikroTik devices via Winbox:
+1. The portal generates `winbox://` protocol links with pre-filled device IP, username, and password.
+2. For 1-click launch from the browser on Windows operator workstations:
+   - Copy the [`tools/register-winbox-protocol.reg`](file:///d:/teamuser%20portal/free-react-tailwind-admin-dashboard-main/tools/register-winbox-protocol.reg) file from the repository to the operator's PC.
+   - Ensure `winbox64.exe` is located in `C:\Users\<User>\Downloads\winbox64.exe` (or update the path in the `.reg` file).
+   - Double-click `register-winbox-protocol.reg` and confirm to register the protocol handler in Windows.
+3. Clicking **Open** in the customer device table will immediately pop open MikroTik Winbox and connect directly to the router.
+
+---
+
+## 📊 Maintenance & Operational Commands
+
+### Manage Backend API (PM2)
+```bash
+# View running status and memory usage
+pm2 status
+
+# View live real-time logs
+pm2 logs teamzero-api
+
+# Restart backend after code changes
+pm2 restart teamzero-api
+
+# Stop backend
+pm2 stop teamzero-api
+```
+
+### Manage Web Server (Nginx)
+```bash
+# Test Nginx configuration syntax
+sudo nginx -t
+
+# Reload configuration without downtime
+sudo systemctl reload nginx
+
+# View Nginx access & error logs
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
+```
+
+### Updating the Application
+When pulling updates or making code modifications in the future:
+```bash
+cd /var/www/teamzero
+git pull
+
+# Rebuild frontend
+npm install
+npm run build
+
+# Restart backend
+pm2 restart teamzero-api
+
+# Reload Nginx
+sudo systemctl reload nginx
+```

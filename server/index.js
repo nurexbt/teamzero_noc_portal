@@ -688,6 +688,14 @@ app.post("/api/launch/winbox", (req, res) => {
       return res.status(400).json({ success: false, message: "Target IP / Host is required." });
     }
 
+    if (process.platform !== "win32") {
+      return res.json({
+        success: false,
+        isRemoteServer: true,
+        message: "Server is running on Linux. Client browser will dispatch protocol handler directly.",
+      });
+    }
+
     const winboxPath = getWinboxExecutablePath();
     const cleanIp = ip.trim();
     const args = [cleanIp];
@@ -724,6 +732,14 @@ app.post("/api/launch/telnet", (req, res) => {
       return res.status(400).json({ success: false, message: "Target IP / Host is required." });
     }
 
+    if (process.platform !== "win32") {
+      return res.json({
+        success: false,
+        isRemoteServer: true,
+        message: "Server is running on Linux. Client browser will dispatch protocol handler directly.",
+      });
+    }
+
     const cleanIp = ip.trim();
     const cleanPort = (port || "23").toString().trim();
 
@@ -750,6 +766,14 @@ app.post("/api/launch/ssh", (req, res) => {
     const { ip, port, username } = req.body;
     if (!ip) {
       return res.status(400).json({ success: false, message: "Target IP / Host is required." });
+    }
+
+    if (process.platform !== "win32") {
+      return res.json({
+        success: false,
+        isRemoteServer: true,
+        message: "Server is running on Linux. Client browser will dispatch protocol handler directly.",
+      });
     }
 
     const cleanIp = ip.trim();

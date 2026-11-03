@@ -748,7 +748,14 @@ export const TerminalConnectionModal: React.FC<TerminalConnectionModalProps> = (
         if (res.ok && data.success) {
           setDesktopFeedback(`Winbox GUI window launched for ${cleanHost}`);
         } else {
-          setDesktopFeedback(`Winbox window triggered for ${cleanHost}`);
+          // If on remote server, dispatch native winbox protocol to client OS
+          const winboxUrl = `winbox://${username ? `${username}:${encodeURIComponent(password)}@` : ""}${cleanHost}`;
+          try {
+            window.location.href = winboxUrl;
+            setDesktopFeedback(`Winbox protocol dispatched for ${cleanHost}`);
+          } catch {
+            setDesktopFeedback(`Winbox window triggered for ${cleanHost}`);
+          }
         }
       } else {
         const endpoint = protocol === "ssh" ? "/api/launch/ssh" : "/api/launch/telnet";
@@ -767,7 +774,16 @@ export const TerminalConnectionModal: React.FC<TerminalConnectionModalProps> = (
         if (res.ok && data.success) {
           setDesktopFeedback(`Desktop ${protocol.toUpperCase()} window launched for ${cleanHost}`);
         } else {
-          setDesktopFeedback(`Desktop client triggered`);
+          const protoUrl =
+            protocol === "ssh"
+              ? `ssh://${username ? `${username}@` : ""}${cleanHost}:${cleanPort}`
+              : `telnet://${cleanHost}:${cleanPort}`;
+          try {
+            window.location.href = protoUrl;
+            setDesktopFeedback(`Dispatched ${protocol.toUpperCase()} protocol for ${cleanHost}`);
+          } catch {
+            setDesktopFeedback(`Desktop client triggered`);
+          }
         }
       }
     } catch {

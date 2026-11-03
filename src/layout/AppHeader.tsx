@@ -91,9 +91,11 @@ const AppHeader: React.FC = () => {
           </button>
 
           <Link to="/" className="flex items-center gap-2 xl:hidden">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-linear-to-br from-brand-500 to-brand-700 text-white">
-              <span className="text-xs font-black">TZ</span>
-            </div>
+            <img
+              src="/favicon.png"
+              alt="TeamZero Logo"
+              className="size-8 rounded-lg shadow-xs object-contain"
+            />
             <div className="flex flex-col">
               <span className="text-sm font-black leading-tight text-gray-900 dark:text-white">
                 TeamZero

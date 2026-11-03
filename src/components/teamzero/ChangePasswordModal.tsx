@@ -36,28 +36,26 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     e.preventDefault();
     setError("");
 
-    // Validate current password
-    if (currentUser.password && currentPassword !== currentUser.password) {
-      setError("Current password does not match.");
+    const cleanCurrent = currentPassword.trim();
+    const cleanNew = newPassword.trim();
+    const cleanConfirm = confirmPassword.trim();
+
+    if (!cleanCurrent) {
+      setError("Please enter your current password.");
       return;
     }
 
-    if (!newPassword || newPassword.length < 4) {
+    if (!cleanNew || cleanNew.length < 4) {
       setError("New password must be at least 4 characters long.");
       return;
     }
 
-    if (newPassword === "admin") {
-      setError("Please choose a secure password different from the default 'admin'.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
+    if (cleanNew !== cleanConfirm) {
       setError("New password and confirmation do not match.");
       return;
     }
 
-    const res = await changePassword(currentUser.id, newPassword);
+    const res = await changePassword(currentUser.id, cleanNew, cleanCurrent);
     if (res.success) {
       setSuccess(true);
       setTimeout(() => {

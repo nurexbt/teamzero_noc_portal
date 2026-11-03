@@ -1,6 +1,6 @@
 import { SidebarProvider, useSidebar } from "@/context/SidebarContext";
 import { cn } from "@/utils";
-import { Outlet } from "react-router";
+import { Navigate, Outlet } from "react-router";
 import AppHeader from "./AppHeader";
 import AppSidebar from "./AppSidebar";
 import Backdrop from "./Backdrop";
@@ -10,6 +10,10 @@ import ChangePasswordModal from "@/components/teamzero/ChangePasswordModal";
 const LayoutContent: React.FC = () => {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
   const { currentUser } = usePortalData();
+
+  if (!currentUser) {
+    return <Navigate to="/signin" replace />;
+  }
 
   return (
     <div className="min-h-screen xl:flex">
@@ -29,11 +33,13 @@ const LayoutContent: React.FC = () => {
         </main>
       </div>
 
-      {/* Mandatory Change Password prompt if user must change password */}
-      <ChangePasswordModal
-        isOpen={Boolean(currentUser?.mustChangePassword)}
-        mandatory={true}
-      />
+      {/* Mandatory Change Password prompt only if user must change password */}
+      {Boolean(currentUser?.mustChangePassword) && (
+        <ChangePasswordModal
+          isOpen={true}
+          mandatory={true}
+        />
+      )}
     </div>
   );
 };

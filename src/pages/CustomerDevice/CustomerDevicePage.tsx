@@ -24,6 +24,7 @@ import ConfirmDeleteModal from "@/components/teamzero/ConfirmDeleteModal";
 import CopyButton from "@/components/teamzero/CopyButton";
 import PasswordDisplay from "@/components/teamzero/PasswordDisplay";
 import WinboxLaunchModal from "@/components/teamzero/WinboxLaunchModal";
+import TerminalConnectionModal from "@/components/teamzero/TerminalConnectionModal";
 import {
   BoltIcon,
   ChipIcon,
@@ -33,6 +34,7 @@ import {
   PlugInIcon,
   PlusIcon,
   SearchIcon,
+  TerminalIcon,
   TrashBinIcon,
 } from "@/icons";
 
@@ -53,6 +55,14 @@ const LOGIN_METHOD_CONFIG: Record<
       "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400",
     borderClass: "border-brand-500",
     icon: <BoltIcon className="size-3.5" />,
+  },
+  ssh: {
+    label: "SSH",
+    port: "22",
+    badgeClass:
+      "bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400",
+    borderClass: "border-purple-500",
+    icon: <TerminalIcon className="size-3.5" />,
   },
   telnet: {
     label: "Telnet",
@@ -125,7 +135,7 @@ const CustomerDevicePage: React.FC = () => {
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Winbox / Telnet Launch Modal
+  // Winbox Launch Modal
   const {
     isOpen: isWinboxModalOpen,
     openModal: openWinboxModal,
@@ -133,6 +143,16 @@ const CustomerDevicePage: React.FC = () => {
   } = useModal();
   const [activeLaunchDevice, setActiveLaunchDevice] =
     useState<CustomerDevice | null>(null);
+
+  // Terminal (SSH & Telnet) Connection Modal
+  const {
+    isOpen: isTerminalModalOpen,
+    openModal: openTerminalModal,
+    closeModal: closeTerminalModal,
+  } = useModal();
+  const [activeTerminalDevice, setActiveTerminalDevice] =
+    useState<CustomerDevice | null>(null);
+  const [terminalProtocol, setTerminalProtocol] = useState<"ssh" | "telnet" | "winbox">("ssh");
 
   // Delete Modal
   const {
@@ -202,8 +222,12 @@ const CustomerDevicePage: React.FC = () => {
         target = `https://${target}`;
       }
       window.open(target, "_blank", "noopener,noreferrer");
+    } else if (device.loginMethod === "ssh" || device.loginMethod === "telnet") {
+      setActiveTerminalDevice(device);
+      setTerminalProtocol(device.loginMethod);
+      openTerminalModal();
     } else {
-      // winbox or telnet
+      // winbox
       setActiveLaunchDevice(device);
       openWinboxModal();
     }
@@ -329,15 +353,32 @@ const CustomerDevicePage: React.FC = () => {
           </div>
         </div>
 
-        {canManage && (
-          <Button
-            onClick={handleOpenAddModal}
-            startIcon={<PlusIcon className="size-4" />}
-            className="whitespace-nowrap"
-          >
-            Add Device
-          </Button>
-        )}
+        <div className="flex items-center gap-2.5">
+          {canLaunch && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setActiveTerminalDevice(null);
+                setTerminalProtocol("ssh");
+                openTerminalModal();
+              }}
+              startIcon={<TerminalIcon className="size-4 text-purple-500" />}
+              className="whitespace-nowrap"
+            >
+              Custom SSH / Telnet
+            </Button>
+          )}
+
+          {canManage && (
+            <Button
+              onClick={handleOpenAddModal}
+              startIcon={<PlusIcon className="size-4" />}
+              className="whitespace-nowrap"
+            >
+              Add Device
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Login Method Filter Pills */}
@@ -354,7 +395,7 @@ const CustomerDevicePage: React.FC = () => {
           All Methods ({devices.length})
         </button>
 
-        {(["winbox", "telnet", "web", "web_ssl"] as LoginMethod[]).map(
+        {(["winbox", "ssh", "telnet", "web", "web_ssl"] as LoginMethod[]).map(
           (method) => {
             const count = devices.filter((d) => d.loginMethod === method).length;
             const config = LOGIN_METHOD_CONFIG[method];
@@ -738,7 +779,7 @@ const CustomerDevicePage: React.FC = () => {
                 Login Method <span className="text-error-500">*</span> (Radio
                 selector)
               </Label>
-              <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {(
                   [
                     {
@@ -746,6 +787,12 @@ const CustomerDevicePage: React.FC = () => {
                       label: "Winbox",
                       sub: "Port 8291",
                       icon: <BoltIcon className="size-4" />,
+                    },
+                    {
+                      value: "ssh",
+                      label: "SSH",
+                      sub: "Port 22",
+                      icon: <TerminalIcon className="size-4" />,
                     },
                     {
                       value: "telnet",
@@ -847,11 +894,19 @@ const CustomerDevicePage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Winbox / Telnet Interactive Launcher Modal */}
+      {/* Winbox Interactive Launcher Modal */}
       <WinboxLaunchModal
         isOpen={isWinboxModalOpen}
         onClose={closeWinboxModal}
         device={activeLaunchDevice}
+      />
+
+      {/* Terminal (SSH & Telnet) Interactive Connection Modal Window */}
+      <TerminalConnectionModal
+        isOpen={isTerminalModalOpen}
+        onClose={closeTerminalModal}
+        device={activeTerminalDevice}
+        initialProtocol={terminalProtocol}
       />
 
       {/* Delete Confirmation Modal */}

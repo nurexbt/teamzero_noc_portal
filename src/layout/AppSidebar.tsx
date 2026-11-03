@@ -326,9 +326,11 @@ const AppSidebar: React.FC = () => {
         <Link to="/" className="flex items-center gap-3">
           {isExpanded || isHovered || isMobileOpen ? (
             <div className="flex items-center gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-md shadow-brand-500/20">
-                <span className="text-base font-black tracking-tight">TZ</span>
-              </div>
+              <img
+                src="/favicon.png"
+                alt="TeamZero Portal Logo"
+                className="size-10 shrink-0 rounded-xl shadow-md shadow-brand-500/20 object-contain"
+              />
               <div className="flex flex-col">
                 <span className="text-base font-black leading-tight tracking-tight text-gray-900 dark:text-white">
                   TeamZero
@@ -339,9 +341,11 @@ const AppSidebar: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="flex size-10 items-center justify-center rounded-xl bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-md shadow-brand-500/20">
-              <span className="text-base font-black tracking-tight">TZ</span>
-            </div>
+            <img
+              src="/favicon.png"
+              alt="TeamZero Portal Logo"
+              className="size-10 shrink-0 rounded-xl shadow-md shadow-brand-500/20 object-contain"
+            />
           )}
         </Link>
       </div>

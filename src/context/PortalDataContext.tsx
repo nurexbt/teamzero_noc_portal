@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 
-export type LoginMethod = "winbox" | "telnet" | "web" | "web_ssl";
+export type LoginMethod = "winbox" | "telnet" | "ssh" | "web" | "web_ssl";
 
 export interface Customer {
   id: string;
@@ -70,7 +70,7 @@ interface PortalDataContextType {
   loading: boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; message?: string; mustChangePassword?: boolean }>;
   logout: () => void;
-  changePassword: (userId: string, newPass: string) => Promise<{ success: boolean; message?: string }>;
+  changePassword: (userId: string, newPass: string, currentPass?: string) => Promise<{ success: boolean; message?: string }>;
   hasPermission: (permission: string) => boolean;
   addCustomer: (customer: Omit<Customer, "id" | "createdAt">) => Customer;
   updateCustomer: (id: string, customer: Partial<Omit<Customer, "id" | "createdAt">>) => void;
@@ -188,6 +188,30 @@ const defaultDevices: CustomerDevice[] = [
     notes: "Edge Distribution Telnet CLI Access",
     createdAt: "2025-03-10 11:00:00",
   },
+  {
+    id: "dev-6",
+    customerId: "cust-1",
+    customerName: "Apex Retail Group",
+    deviceName: "Core-Ubuntu-Server",
+    deviceIp: "10.0.0.15:22",
+    username: "sysadmin",
+    password: "Ssh#Enterprise2025!",
+    loginMethod: "ssh",
+    notes: "Linux Gateway & Radius Auth Server",
+    createdAt: "2025-03-12 14:00:00",
+  },
+  {
+    id: "dev-huawei-babubazar",
+    customerId: "cust-1",
+    customerName: "Apex Retail Group",
+    deviceName: "Babubazar",
+    deviceIp: "10.199.199.188:23",
+    username: "asnur1",
+    password: "",
+    loginMethod: "telnet",
+    notes: "Huawei Switch - Distribution Telnet Access",
+    createdAt: "2025-03-15 10:00:00",
+  },
 ];
 
 const defaultNmsPortals: NmsPortal[] = [
@@ -291,7 +315,7 @@ const defaultUsers: PortalUser[] = [
     roleName: "Super Admin",
     status: "active",
     lastActive: "Just now",
-    mustChangePassword: true,
+    mustChangePassword: false,
     isSuperUser: true,
     createdAt: "2025-01-01 00:00:00",
   },
@@ -392,7 +416,7 @@ export const PortalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (e) {
       console.error("Failed to load current user", e);
     }
-    return defaultUsers[0];
+    return null;
   });
 
   const [dbConnected, setDbConnected] = useState<boolean>(false);
@@ -489,10 +513,16 @@ export const PortalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const data = await res.json();
 
       if (!res.ok || !data.success) {
+        if (res.status >= 500 || (data.message && (data.message.includes("ECONNREFUSED") || data.message.includes("database")))) {
+          throw new Error("Database offline, falling back to local cache");
+        }
         return { success: false, message: data.message || "Invalid username or password" };
       }
 
-      const activeUser: PortalUser = data.user;
+      const activeUser: PortalUser = {
+        ...data.user,
+        password: data.user.password || cleanPass,
+      };
       setCurrentUser(activeUser);
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(activeUser));
       setUsers((prev) => prev.map((u) => (u.id === activeUser.id ? activeUser : u)));
@@ -507,7 +537,7 @@ export const PortalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const found = users.find(
         (u) =>
           (u.username.toLowerCase() === cleanUser || u.email.toLowerCase() === cleanUser) &&
-          (u.password === cleanPass || (!u.password && cleanPass === "admin"))
+          u.password === cleanPass
       );
 
       if (!found) {
@@ -539,16 +569,21 @@ export const PortalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
   };
 
-  const changePassword = async (userId: string, newPass: string) => {
-    if (!newPass.trim() || newPass.length < 4) {
-      return { success: false, message: "Password must be at least 4 characters long." };
+  const changePassword = async (userId: string, newPass: string, currentPass?: string) => {
+    const trimmedNew = newPass.trim();
+    if (!trimmedNew || trimmedNew.length < 4) {
+      return { success: false, message: "New password must be at least 4 characters long." };
     }
 
     try {
       const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, newPassword: newPass.trim() }),
+        body: JSON.stringify({
+          userId,
+          newPassword: trimmedNew,
+          currentPassword: currentPass ? currentPass.trim() : undefined,
+        }),
       });
 
       const data = await res.json();
@@ -557,19 +592,20 @@ export const PortalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     } catch (err) {
       console.error("API error during change password:", err);
+      return { success: false, message: "Network connection error while updating password." };
     }
 
     // Update state locally
     setUsers((prev) =>
       prev.map((u) =>
         u.id === userId
-          ? { ...u, password: newPass.trim(), mustChangePassword: false }
+          ? { ...u, password: trimmedNew, mustChangePassword: false }
           : u
       )
     );
 
     if (currentUser && currentUser.id === userId) {
-      const updated = { ...currentUser, password: newPass.trim(), mustChangePassword: false };
+      const updated = { ...currentUser, password: trimmedNew, mustChangePassword: false };
       setCurrentUser(updated);
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(updated));
     }
@@ -655,7 +691,11 @@ export const PortalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       createdAt: new Date().toISOString().slice(0, 19).replace("T", " "),
     };
 
-    setDevices((prev) => [newDevice, ...prev]);
+    setDevices((prev) => {
+      const updated = [newDevice, ...prev];
+      localStorage.setItem(STORAGE_KEYS.DEVICES, JSON.stringify(updated));
+      return updated;
+    });
 
     fetch("/api/devices", {
       method: "POST",
@@ -665,9 +705,11 @@ export const PortalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       .then((res) => res.json())
       .then((saved) => {
         if (saved && saved.id) {
-          setDevices((prev) =>
-            prev.map((d) => (d.id === tempId ? { ...d, id: saved.id, createdAt: saved.createdAt } : d))
-          );
+          setDevices((prev) => {
+            const updated = prev.map((d) => (d.id === tempId ? { ...d, id: saved.id, createdAt: saved.createdAt } : d));
+            localStorage.setItem(STORAGE_KEYS.DEVICES, JSON.stringify(updated));
+            return updated;
+          });
         }
       })
       .catch((err) => console.error("Error saving device to MySQL:", err));
@@ -676,9 +718,11 @@ export const PortalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const updateDevice = (id: string, deviceData: Partial<Omit<CustomerDevice, "id" | "createdAt">>) => {
-    setDevices((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...deviceData } : item))
-    );
+    setDevices((prev) => {
+      const updated = prev.map((item) => (item.id === id ? { ...item, ...deviceData } : item));
+      localStorage.setItem(STORAGE_KEYS.DEVICES, JSON.stringify(updated));
+      return updated;
+    });
 
     fetch(`/api/devices/${id}`, {
       method: "PUT",
@@ -688,7 +732,11 @@ export const PortalDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const deleteDevice = (id: string) => {
-    setDevices((prev) => prev.filter((item) => item.id !== id));
+    setDevices((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      localStorage.setItem(STORAGE_KEYS.DEVICES, JSON.stringify(updated));
+      return updated;
+    });
 
     fetch(`/api/devices/${id}`, {
       method: "DELETE",

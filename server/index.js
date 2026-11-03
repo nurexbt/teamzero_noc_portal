@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import net from "net";
 import { spawn } from "child_process";
 import pool, { testConnection } from "./db.js";
 
@@ -53,9 +54,8 @@ app.post("/api/auth/login", async (req, res) => {
 
     const user = rows[0];
 
-    // Password validation (plain match for portal demo, supports default admin)
-    const valid = user.password === cleanPass || (!user.password && cleanPass === "admin");
-    if (!valid) {
+    // Strict password validation: exact match against database password
+    if (user.password !== cleanPass) {
       return res.status(401).json({ success: false, message: "Invalid username or password" });
     }
 
@@ -76,6 +76,7 @@ app.post("/api/auth/login", async (req, res) => {
         name: user.name,
         username: user.username,
         email: user.email,
+        password: user.password,
         roleId: user.role_id,
         roleName: user.role_name,
         status: user.status,
@@ -94,22 +95,40 @@ app.post("/api/auth/login", async (req, res) => {
 
 app.post("/api/auth/change-password", async (req, res) => {
   try {
-    const { userId, newPassword } = req.body;
+    const { userId, currentPassword, newPassword } = req.body;
     if (!userId || !newPassword || newPassword.trim().length < 4) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 4 characters long.",
+        message: "New password must be at least 4 characters long.",
       });
     }
 
-    const [result] = await pool.query(
+    const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [userId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const user = rows[0];
+
+    // Strict current password verification
+    if (!currentPassword || !currentPassword.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password is required.",
+      });
+    }
+
+    if (user.password !== currentPassword.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password does not match.",
+      });
+    }
+
+    await pool.query(
       "UPDATE users SET password = ?, must_change_password = 0 WHERE id = ?",
       [newPassword.trim(), userId]
     );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
 
     res.json({ success: true, message: "Password updated successfully" });
   } catch (error) {
@@ -621,9 +640,21 @@ function getWinboxExecutablePath() {
   }
 
   // Check project tools folder first
-  const projectTool = path.resolve("tools", "WinBox.exe");
-  if (fs.existsSync(projectTool)) {
-    return projectTool;
+  const projectTools = [
+    path.resolve("tools", "WinBox.exe"),
+    path.resolve("tools", "winbox64.exe"),
+    path.resolve("tools", "winbox.exe"),
+    path.resolve("WinBox.exe"),
+    path.resolve("winbox64.exe"),
+    path.resolve("winbox.exe"),
+    "D:\\SOFTWARE\\winbox64.exe",
+    "D:\\SOFTWARE\\winbox.exe",
+    "D:\\SOFTWARE\\WinBox.exe",
+  ];
+  for (const tool of projectTools) {
+    if (fs.existsSync(tool)) {
+      return tool;
+    }
   }
 
   const userHome = os.homedir();
@@ -712,6 +743,210 @@ app.post("/api/launch/telnet", (req, res) => {
     console.error("Failed to launch Telnet:", error);
     res.status(500).json({ success: false, message: error.message });
   }
+});
+
+app.post("/api/launch/ssh", (req, res) => {
+  try {
+    const { ip, port, username } = req.body;
+    if (!ip) {
+      return res.status(400).json({ success: false, message: "Target IP / Host is required." });
+    }
+
+    const cleanIp = ip.trim();
+    const cleanPort = (port || "22").toString().trim();
+    const cleanUser = username ? username.trim() : "";
+    const targetArg = cleanUser ? `${cleanUser}@${cleanIp}` : cleanIp;
+    const sshCmd = `ssh -p ${cleanPort} ${targetArg}`;
+
+    console.log(`[SSH Launch] Spawning terminal: ${sshCmd}`);
+
+    const child = spawn("cmd.exe", ["/c", "start", `SSH: ${targetArg}`, "cmd.exe", "/k", sshCmd], {
+      detached: true,
+      stdio: "ignore",
+      shell: true,
+    });
+
+    child.unref();
+
+    res.json({
+      success: true,
+      message: `SSH terminal opened for ${targetArg}:${cleanPort}`,
+      command: sshCmd,
+    });
+  } catch (error) {
+    console.error("Failed to launch SSH:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ================= REAL LIVE TELNET & SSH TERMINAL SOCKET BRIDGE =================
+const activeTerminalSessions = new Map();
+
+function handleTelnetNegotiation(socket, buf) {
+  let clean = [];
+  let i = 0;
+  while (i < buf.length) {
+    if (buf[i] === 255) { // Telnet IAC
+      const cmd = buf[i + 1];
+      const opt = buf[i + 2];
+      if (cmd >= 251 && cmd <= 254) {
+        // Option negotiation: reply appropriately so switch proceeds
+        if (cmd === 253) socket.write(Buffer.from([255, 252, opt])); // DO -> WONT
+        else if (cmd === 251) socket.write(Buffer.from([255, 253, opt])); // WILL -> DO
+        i += 3;
+        continue;
+      } else if (cmd === 250) { // Subnegotiation
+        let j = i + 2;
+        while (j < buf.length && !(buf[j] === 255 && buf[j + 1] === 240)) j++;
+        i = j + 2;
+        continue;
+      } else {
+        i += 2;
+        continue;
+      }
+    }
+    clean.push(buf[i]);
+    i++;
+  }
+  return Buffer.from(clean).toString("utf-8");
+}
+
+app.get("/api/terminal/stream", (req, res) => {
+  const { sessionId, protocol = "telnet", host, port = "23", username = "admin" } = req.query;
+
+  if (!sessionId || !host) {
+    return res.status(400).json({ error: "Missing sessionId or host" });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const sendEvent = (event, payload) => {
+    try {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+    } catch {
+      // client disconnected
+    }
+  };
+
+  const cleanHost = host.trim();
+  const cleanPort = Number(port) || (protocol === "ssh" ? 22 : 23);
+
+  sendEvent("status", { state: "connecting", message: `Connecting to ${cleanHost}:${cleanPort} via ${protocol.toUpperCase()}...` });
+
+  if (protocol === "telnet") {
+    const socket = net.createConnection({ host: cleanHost, port: cleanPort }, () => {
+      sendEvent("status", { state: "connected", message: `TCP socket established with ${cleanHost}:${cleanPort}` });
+    });
+
+    activeTerminalSessions.set(sessionId, {
+      type: "telnet",
+      socket,
+      host: cleanHost,
+      port: cleanPort,
+      res,
+    });
+
+    socket.on("data", (chunk) => {
+      const cleanText = handleTelnetNegotiation(socket, chunk);
+      if (cleanText) {
+        sendEvent("output", { text: cleanText });
+      }
+    });
+
+    socket.on("error", (err) => {
+      sendEvent("status", { state: "error", message: `Network error: ${err.message}` });
+      activeTerminalSessions.delete(sessionId);
+    });
+
+    socket.on("close", () => {
+      sendEvent("status", { state: "disconnected", message: "Remote host closed connection." });
+      activeTerminalSessions.delete(sessionId);
+    });
+
+    req.on("close", () => {
+      socket.destroy();
+      activeTerminalSessions.delete(sessionId);
+    });
+  } else {
+    // Real SSH session using OpenSSH
+    const userArg = username ? `${username.trim()}@${cleanHost}` : cleanHost;
+    const child = spawn("ssh", ["-tt", "-o", "StrictHostKeyChecking=no", "-p", cleanPort.toString(), userArg], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    activeTerminalSessions.set(sessionId, {
+      type: "ssh",
+      process: child,
+      host: cleanHost,
+      port: cleanPort,
+      res,
+    });
+
+    sendEvent("status", { state: "connected", message: `SSH process started for ${userArg}:${cleanPort}` });
+
+    child.stdout.on("data", (chunk) => {
+      sendEvent("output", { text: chunk.toString("utf-8") });
+    });
+
+    child.stderr.on("data", (chunk) => {
+      sendEvent("output", { text: chunk.toString("utf-8") });
+    });
+
+    child.on("error", (err) => {
+      sendEvent("status", { state: "error", message: `SSH spawn error: ${err.message}` });
+      activeTerminalSessions.delete(sessionId);
+    });
+
+    child.on("close", (code) => {
+      sendEvent("status", { state: "disconnected", message: `SSH session ended (exit code: ${code}).` });
+      activeTerminalSessions.delete(sessionId);
+    });
+
+    req.on("close", () => {
+      try { child.kill(); } catch {}
+      activeTerminalSessions.delete(sessionId);
+    });
+  }
+});
+
+app.post("/api/terminal/send", (req, res) => {
+  const { sessionId, data } = req.body;
+  if (!sessionId || data === undefined) {
+    return res.status(400).json({ error: "Missing sessionId or data" });
+  }
+
+  const session = activeTerminalSessions.get(sessionId);
+  if (!session) {
+    return res.status(404).json({ error: "No active session or session already closed" });
+  }
+
+  try {
+    if (session.type === "telnet" && session.socket && !session.socket.destroyed) {
+      session.socket.write(data);
+    } else if (session.type === "ssh" && session.process?.stdin) {
+      session.process.stdin.write(data);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/terminal/disconnect", (req, res) => {
+  const { sessionId } = req.body;
+  const session = activeTerminalSessions.get(sessionId);
+  if (session) {
+    if (session.type === "telnet" && session.socket) {
+      session.socket.destroy();
+    } else if (session.type === "ssh" && session.process) {
+      try { session.process.kill(); } catch {}
+    }
+    activeTerminalSessions.delete(sessionId);
+  }
+  res.json({ success: true });
 });
 
 // Start Express Server

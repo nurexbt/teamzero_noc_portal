@@ -74,9 +74,9 @@ INSERT IGNORE INTO roles (id, name, description, permissions, is_system, created
 ('role-noc', 'NOC Engineer', 'Operational engineering access for device maintenance, Winbox protocol launch, and NMS telemetry analysis.', '["View Customers", "Manage Devices", "View Passwords", "Launch Winbox/Telnet", "Access NMS Portals"]', 0, '2025-01-05 00:00:00'),
 ('role-operator', 'Network Operator', 'Read-only monitoring access to client directories, ping status, and telemetry dashboards.', '["View Customers", "View Devices", "Access NMS Portals"]', 0, '2025-01-10 00:00:00');
 
--- Seed Users (default admin / admin with must_change_password)
+-- Seed Users (default admin / admin)
 INSERT IGNORE INTO users (id, name, username, email, password, role_id, role_name, status, last_active, must_change_password, is_super_user, created_at) VALUES
-('usr-admin', 'Super Administrator', 'admin', 'admin@teamzero.solutions', 'admin', 'role-super-admin', 'Super Admin', 'active', 'Just now', 1, 1, '2025-01-01 00:00:00'),
+('usr-admin', 'Super Administrator', 'admin', 'admin@teamzero.solutions', 'admin', 'role-super-admin', 'Super Admin', 'active', 'Just now', 0, 1, '2025-01-01 00:00:00'),
 ('usr-2', 'Fahim Rahman', 'fahim_noc', 'fahim@teamzero.solutions', 'password123', 'role-noc', 'NOC Engineer', 'active', '15 mins ago', 0, 0, '2025-01-15 11:00:00'),
 ('usr-3', 'Sabbir Hossain', 'sabbir_net', 'sabbir@teamzero.solutions', 'password123', 'role-operator', 'Network Operator', 'active', '2 hours ago', 0, 0, '2025-02-01 09:30:00');
 

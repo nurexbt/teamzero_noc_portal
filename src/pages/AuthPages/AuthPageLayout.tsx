@@ -19,9 +19,13 @@ export default function AuthLayout({
             <div className="flex max-w-sm flex-col items-center text-center">
               <Link
                 to="/"
-                className="mb-4 flex size-16 items-center justify-center rounded-3xl bg-white text-brand-600 shadow-xl transition hover:scale-105"
+                className="mb-4 flex size-16 items-center justify-center rounded-3xl bg-white p-2.5 shadow-xl transition hover:scale-105"
               >
-                <span className="text-2xl font-black">TZ</span>
+                <img
+                  src="/favicon.png"
+                  alt="TeamZero Portal Logo"
+                  className="size-full object-contain"
+                />
               </Link>
 
               <h2 className="mb-2 text-2xl font-bold text-white">

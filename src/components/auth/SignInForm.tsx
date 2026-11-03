@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router";
 import Label from "@/components/form/Label";
 import Checkbox from "@/components/form/input/Checkbox";
 import Input from "@/components/form/input/InputField";
@@ -10,12 +10,16 @@ import { usePortalData } from "@/context/PortalDataContext";
 
 export default function SignInForm() {
   const navigate = useNavigate();
-  const { login } = usePortalData();
+  const { login, currentUser } = usePortalData();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(true);
   const [error, setError] = useState("");
+
+  if (currentUser) {
+    return <Navigate to="/" replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,9 +52,11 @@ export default function SignInForm() {
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-8">
         <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-theme-sm dark:border-gray-800 dark:bg-gray-900">
           <div className="mb-6 flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-md shadow-brand-500/30">
-              <span className="text-base font-black">TZ</span>
-            </div>
+            <img
+              src="/favicon.png"
+              alt="TeamZero Logo"
+              className="size-11 rounded-2xl shadow-md shadow-brand-500/30 object-contain"
+            />
             <div>
               <h1 className="text-lg font-bold text-gray-900 dark:text-white">
                 TeamZero Solutions
@@ -68,20 +74,6 @@ export default function SignInForm() {
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               Enter your authorized credentials to access network controls.
             </p>
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50/50 p-2.5 text-xs text-brand-700 dark:border-brand-500/20 dark:bg-brand-500/10 dark:text-brand-300">
-              <span className="font-medium">Default Super Admin:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setUsername("admin");
-                  setPassword("admin");
-                }}
-                className="font-mono font-bold underline hover:text-brand-800 dark:hover:text-brand-200"
-                title="Click to auto-fill admin / admin"
-              >
-                admin / admin
-              </button>
-            </div>
           </div>
 
           {error && (

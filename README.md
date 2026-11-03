@@ -1,15 +1,33 @@
 # TeamZero Solutions Portal — Ubuntu Deployment & Installation Guide
 
-Complete, step-by-step production deployment guide for the **TeamZero Solutions NOC & Customer Management Portal** on **Ubuntu 20.04, 22.04, and 24.04 LTS**.
+Production deployment guide and server reference for the **TeamZero Solutions NOC & Customer Management Portal** on **Ubuntu LTS**.
+
+---
+
+## 🚀 Live Production Deployment
+
+| Attribute | Value |
+| :--- | :--- |
+| **Domain** | **`http://noc.teamzero.bd`** |
+| **Server IP** | `103.166.230.228` |
+| **Server OS** | Ubuntu 22.04.5 LTS |
+| **Web Server** | Apache 2.4 (VirtualHost on port 80 / 443 with React SPA rewrite rules) |
+| **Reverse Proxy** | `/api/` → `http://127.0.0.1:5001/api/` |
+| **Directory** | `/var/www/noc.teamzero.bd` |
+| **PM2 Process** | `noc-teamzero-api` (auto-boot via systemd `pm2-nms.service`) |
+| **Database** | MariaDB: `teamzero_portal` (user: `teamzero`) |
+| **Default Login** | Username: **`admin`** \| Password: **`admin`** |
+
+> **DNS Note**: Point your domain `noc.teamzero.bd` via an **A record** to `103.166.230.228` in your DNS / Cloudflare manager. Once pointed, you can optionally enable SSL with `sudo certbot --apache -d noc.teamzero.bd`.
 
 ---
 
 ## 📋 Architecture Overview
 
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4 (compiled to static production bundle in `dist/`, served by Nginx).
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4 (compiled to static production bundle in `dist/`, served by Apache/Nginx).
 - **Backend API**: Node.js Express daemon running on port `5001`, managed by **PM2**.
-- **Database**: MySQL 8.0+ storing customers, devices, NMS portals, roles, and RBAC permissions.
-- **Web Server & Reverse Proxy**: **Nginx** handles incoming HTTP/HTTPS traffic on ports 80/443, serves the Vite SPA frontend, and proxies `/api/*` requests to Express on `127.0.0.1:5001`.
+- **Database**: MariaDB / MySQL 8.0+ storing customers, devices, NMS portals, roles, and RBAC permissions.
+- **Web Server & Reverse Proxy**: **Apache / Nginx** handles incoming traffic, serves the Vite SPA frontend, and proxies `/api/*` requests to Express on `127.0.0.1:5001`.
 
 ---
 

@@ -6,6 +6,7 @@ import type { CustomerDevice, LoginMethod } from "@/context/PortalDataContext";
 import CopyButton from "@/components/teamzero/CopyButton";
 import PasswordDisplay from "@/components/teamzero/PasswordDisplay";
 import WinboxLaunchModal from "@/components/teamzero/WinboxLaunchModal";
+import TerminalConnectionModal from "@/components/teamzero/TerminalConnectionModal";
 import { useModal } from "@/hooks/useModal";
 import {
   BoltIcon,
@@ -17,10 +18,12 @@ import {
   PlugInIcon,
   PlusIcon,
   ArrowRightIcon,
+  TerminalIcon,
 } from "@/icons";
 
 const METHOD_ICONS: Record<LoginMethod, React.ReactNode> = {
   winbox: <BoltIcon className="size-3.5 text-brand-500" />,
+  ssh: <TerminalIcon className="size-3.5 text-purple-500" />,
   telnet: <PlugInIcon className="size-3.5 text-warning-500" />,
   web: <GlobeIcon className="size-3.5 text-blue-light-500" />,
   web_ssl: <LockIcon className="size-3.5 text-success-500" />,
@@ -36,6 +39,15 @@ const TeamZeroDashboard: React.FC = () => {
   } = useModal();
   const [activeDevice, setActiveDevice] = React.useState<CustomerDevice | null>(null);
 
+  // Terminal (SSH & Telnet) Modal
+  const {
+    isOpen: isTerminalModalOpen,
+    openModal: openTerminalModal,
+    closeModal: closeTerminalModal,
+  } = useModal();
+  const [terminalDevice, setTerminalDevice] = React.useState<CustomerDevice | null>(null);
+  const [terminalProto, setTerminalProto] = React.useState<"ssh" | "telnet" | "winbox">("ssh");
+
   const handleOpenDevice = (device: CustomerDevice) => {
     if (device.loginMethod === "web") {
       let target = device.deviceIp;
@@ -49,6 +61,10 @@ const TeamZeroDashboard: React.FC = () => {
         target = `https://${target}`;
       }
       window.open(target, "_blank", "noopener,noreferrer");
+    } else if (device.loginMethod === "ssh" || device.loginMethod === "telnet") {
+      setTerminalDevice(device);
+      setTerminalProto(device.loginMethod);
+      openTerminalModal();
     } else {
       setActiveDevice(device);
       openWinboxModal();
@@ -64,6 +80,7 @@ const TeamZeroDashboard: React.FC = () => {
   };
 
   const winboxCount = devices.filter((d) => d.loginMethod === "winbox").length;
+  const sshCount = devices.filter((d) => d.loginMethod === "ssh").length;
   const webSslCount = devices.filter((d) => d.loginMethod === "web_ssl").length;
   const webCount = devices.filter((d) => d.loginMethod === "web").length;
   const telnetCount = devices.filter((d) => d.loginMethod === "telnet").length;
@@ -92,6 +109,18 @@ const TeamZeroDashboard: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setTerminalDevice(null);
+                setTerminalProto("ssh");
+                openTerminalModal();
+              }}
+              className="inline-flex items-center gap-2 rounded-xl bg-black/25 hover:bg-black/35 border border-white/20 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-md transition cursor-pointer"
+            >
+              <TerminalIcon className="size-4 text-purple-300" />
+              <span>SSH / Telnet Console</span>
+            </button>
             <Link
               to="/devices"
               className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-brand-600 shadow-md transition hover:bg-gray-50"
@@ -190,6 +219,10 @@ const TeamZeroDashboard: React.FC = () => {
             <div className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
               <BoltIcon className="size-3 text-brand-500" />
               <span>Winbox: {winboxCount}</span>
+            </div>
+            <div className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
+              <TerminalIcon className="size-3 text-purple-500" />
+              <span>SSH: {sshCount}</span>
             </div>
             <div className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
               <LockIcon className="size-3 text-success-500" />
@@ -328,6 +361,14 @@ const TeamZeroDashboard: React.FC = () => {
         isOpen={isWinboxModalOpen}
         onClose={closeWinboxModal}
         device={activeDevice}
+      />
+
+      {/* Terminal (SSH & Telnet) Connection Modal Window */}
+      <TerminalConnectionModal
+        isOpen={isTerminalModalOpen}
+        onClose={closeTerminalModal}
+        device={terminalDevice}
+        initialProtocol={terminalProto}
       />
     </>
   );
